@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Frog Jump Championship</title>
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --dark: #2E7D32;
+            --bg: #E8F5E9;
+            --text: #ffffff;
+            --shadow: rgba(0,0,0,0.3);
+            --water: #4FC3F7;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+        }
+
+        body {
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text);
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 600px;
+            /* 16:9 vertical aspect ratio */
+            aspect-ratio: 9 / 16;
+            background-color: var(--water);
+            box-shadow: 0 0 20px black;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+        }
+
+        .overlay.active {
+            display: flex;
+        }
+
+        .title {
+            font-size: 3rem;
+            text-align: center;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 3px 3px 0 var(--dark), 6px 6px 0 var(--primary);
+            margin-bottom: 30px;
+            transform: rotate(-2deg);
+            animation: bounceIn 2s infinite alternate;
+        }
+
+        .btn {
+            background: linear-gradient(to bottom, #81C784, #4CAF50);
+            border: 4px solid #2E7D32;
+            border-radius: 30px;
+            padding: 15px 40px;
+            font-size: 1.5rem;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+            box-shadow: 0 6px 0 #1B5E20, 0 10px 10px rgba(0,0,0,0.3);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 #1B5E20, 0 0 0 rgba(0,0,0,0);
+        }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: none;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+
+        .score-box {
+            background: rgba(0,0,0,0.5);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        /* Charge Meter Overlay */
+        #charge-container {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            border: 2px solid white;
+            display: none;
+            pointer-events: none;
+        }
+
+        #charge-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(to right, #4CAF50, #FFEB3B, #F44336);
+            border-radius: 8px;
+            transition: width 0.1s;
+        }
+
+        @keyframes bounceIn {
+            0% { transform: translateY(0px) rotate(-2deg) scale(1); }
+            100% { transform: translateY(-10px) rotate(2deg) scale(1.05); }
+        }
+
+        #touch-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        .touch-zone {
+            position: absolute;
+            bottom: 0;
+            width: 50%;
+            height: 100%;
+        }
+        #touch-left { left: 0; }
+        #touch-right { right: 0; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Invisible touch zones for mobile -->
+    <div id="touch-controls">
+        <div id="touch-left" class="touch-zone"></div>
+        <div id="touch-right" class="touch-zone"></div>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="score-box">Height: <span id="score">0</span>m</div>
+        <div class="score-box" style="color: yellow;">Flies: <span id="flies">0</span></div>
+    </div>
+
+    <!-- Charge Bar -->
+    <div id="charge-container">
+        <div id="charge-bar"></div>
+    </div>
+
+    <div id="character-select" class="overlay">
+        <h1 class="title" style="font-size: 2rem;">SELECT FROG</h1>
+        <div id="frog-list" style="display: flex; flex-wrap: wrap; justify-content: center; max-width: 500px; gap: 10px;">
+            <!-- Generated via JS -->
+        </div>
+        <button class="btn" id="btn-to-theme">NEXT</button>
+    </div>
+
+    <!-- Theme Select State -->
+    <div id="theme-select" class="overlay">
+        <h1 class="title" style="font-size: 2rem;">SELECT TOWER</h1>
+        <div id="theme-list" style="display: flex; flex-wrap: wrap; justify-content: center; max-width: 500px; gap: 10px;">
+            <!-- Generated via JS -->
+        </div>
+        <button class="btn" id="btn-start-race">START RACE</button>
+    </div>
+
+    <!-- Main Menu State -->
+    <div id="menu" class="overlay active">
+        <h1 class="title">FROG JUMP<br>CHAMPIONSHIP</h1>
+        <button class="btn" id="btn-play">Quick Race</button>
+        <button class="btn" id="btn-survival">Survival Mode</button>
+        <button class="btn" id="btn-local">Local 2-Player</button>
+    </div>
+
+    <!-- Game Over State -->
+    <div id="game-over" class="overlay">
+        <h1 class="title" style="color: #FF5252;">SPLASH!</h1>
+        <div class="score-box" style="margin-bottom: 20px; font-size: 2rem;">Score: <span id="final-score">0</span></div>
+        <button class="btn" id="btn-restart">Try Again</button>
+        <button class="btn" id="btn-menu">Main Menu</button>
+    </div>
+</div>
+
+<script>
+/**
+ * FROG JUMP CHAMPIONSHIP ENGINE
+ */
+
+// --- AUDIO SYSTEM ---
+const AudioSys = {
+    ctx: null,
+    init() {
+        try {
+            window.AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+        } catch(e) { console.warn("Web Audio API not supported"); }
+    },
+    playTone(freq, type, duration, vol=0.1, slideFreq=null) {
+        if(!this.ctx) return;
+        let osc = this.ctx.createOscillator();
+        let gain = this.ctx.createGain();
+        osc.type = type;
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        let now = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(freq, now);
+        if(slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, now + duration);
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        osc.start(now);
+        osc.stop(now + duration);
+    },
+    jump() { this.playTone(300, 'sine', 0.2, 0.1, 600); },
+    land() { this.playTone(150, 'square', 0.1, 0.05); },
+    collect() { this.playTone(800, 'sine', 0.1, 0.1, 1200); setTimeout(() => this.playTone(1200, 'sine', 0.1, 0.1, 1600), 50); },
+    splash() { this.playTone(100, 'sawtooth', 0.4, 0.2, 50); }
+};
+
+// --- UTILS & MATH ---
+const MathUtils = {
+    lerp: (a, b, t) => a + (b - a) * t,
+    clamp: (val, min, max) => Math.min(Math.max(val, min), max),
+    rand: (min, max) => Math.random() * (max - min) + min,
+    randInt: (min, max) => Math.floor(Math.random() * (max - min + 1)) + min,
+    dist: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1),
+    checkAABB: (r1, r2) => {
+        return r1.x < r2.x + r2.width &&
+               r1.x + r1.width > r2.x &&
+               r1.y < r2.y + r2.height &&
+               r1.y + r1.height > r2.y;
+    }
+};
+
+// --- GAME CONFIG ---
+const CONFIG = {
+    gravity: 0.2, // slower fall
+    terminalVelocity: 10,
+    baseJumpForce: -10, // higher base jump
+    maxJumpForce: -20, // higher max jump
+    chargeTimeMs: 600, // faster charge
+    cameraSpeed: 2,
+    platformHeight: 16,
+    frogSize: 32,
+    worldWidth: 600, // Logical width
+    worldHeight: 1066 // Logical height
+};
+
+// --- THEMES & WORLDS ---
+const THEMES = {
+    Meadows: { name: "Lily Pad Meadows", bg: "#4FC3F7", pTypes: ['normal', 'normal', 'leaf', 'moving'], pColor: '#4CAF50', leafColor: '#8BC34A' },
+    Mushroom: { name: "Mushroom Heights", bg: "#2E1538", pTypes: ['bouncing', 'bouncing', 'normal'], pColor: '#7B1FA2', bounceColor: '#E91E63' },
+    Caverns: { name: "Crystal Caverns", bg: "#0A192F", pTypes: ['slippery', 'slippery', 'normal'], pColor: '#4DD0E1', slipperyColor: '#80DEEA' },
+    Storm: { name: "Storm Summit", bg: "#263238", pTypes: ['moving', 'cloud', 'normal'], pColor: '#B0BEC5', cloudColor: '#ECEFF1' },
+    Golden: { name: "Golden Fly Tower", bg: "#FFA000", pTypes: ['normal', 'moving', 'bouncing', 'leaf', 'slippery', 'cloud'], pColor: '#FFD54F', pDecor: '#FFC107' }
+};
+
+// --- FROG TYPES ---
+const FROGS = {
+    Racer: { name: "Ribbit the Racer", color: "#4CAF50", secondary: "#FFEB3B", trait: "quick_charge" },
+    Lily: { name: "Lily the Leaper", color: "#F48FB1", secondary: "#fff", trait: "float_fall" },
+    Bulky: { name: "Bulky the Bouncer", color: "#2196F3", secondary: "#0D47A1", trait: "sturdy_landing" },
+    Zip: { name: "Zip the Darter", color: "#F44336", secondary: "#fff", trait: "double_tap" },
+    Grump: { name: "Grump the Gurgler", color: "#795548", secondary: "#3E2723", trait: "grumpy_stomp" },
+    Sparkle: { name: "Sparkle the Swamp Queen", color: "#9C27B0", secondary: "#E040FB", trait: "glitter_trail" },
+    Hops: { name: "Hops the Hopper", color: "#FFC107", secondary: "#FF9800", trait: "super_bounce" },
+    Chill: { name: "Chill the Frostfrog", color: "#E0F7FA", secondary: "#00BCD4", trait: "ice_slide" }
+};
+
+// --- ENTITIES ---
+class Frog {
+    constructor(x, y, typeInfo, isAI = false, playerIndex = 0) {
+        this.id = Math.random().toString(36).substr(2, 9);
+        this.x = x;
+        this.y = y;
+        this.width = CONFIG.frogSize;
+        this.height = CONFIG.frogSize;
+        this.vx = 0;
+        this.vy = 0;
+        this.type = typeInfo;
+        this.isAI = isAI;
+        this.playerIndex = playerIndex;
+        
+        this.isGrounded = false;
+        this.isCharging = false;
+        this.chargeStart = 0;
+        this.chargePercent = 0;
+        this.hasDoubleTapped = false;
+        
+        this.squash = 1;
+        this.stretch = 1;
+        this.direction = 1; // 1 right, -1 left
+        
+        this.dead = false;
+        this.stunned = 0;
+
+        // AI specific
+        this.aiTargetPlatform = null;
+        this.aiWaitTime = 0;
+    }
+
+    update(dt, input) {
+        if(this.dead) return;
+
+        if (this.stunned > 0) {
+            this.stunned -= dt;
+            this.isCharging = false;
+        } else if (this.isAI) {
+            this.updateAI();
+        } else {
+            this.handleInput(input);
+        }
+
+        // Apply physics
+        let gravityEff = CONFIG.gravity;
+        if (this.type.trait === 'float_fall' && this.vy > 0) gravityEff *= 0.85;
+        
+        this.vy += gravityEff;
+        this.vy = MathUtils.clamp(this.vy, -20, CONFIG.terminalVelocity);
+        
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Screen boundaries
+        if (this.x < 0) { this.x = 0; this.vx *= -0.5; }
+        if (this.x + this.width > CONFIG.worldWidth) { this.x = CONFIG.worldWidth - this.width; this.vx *= -0.5; }
+
+        this.isGrounded = false; 
+
+        // Visual effects
+        if (this.type.trait === 'glitter_trail' && (Math.abs(this.vx) > 1 || Math.abs(this.vy) > 1) && Math.random() < 0.2) {
+             Game.particles.spawn(this.x + this.width/2, this.y + this.height/2, 1, '#E040FB');
+        }
+    }
+
+    handleInput(input) {
+        if (this.isGrounded) {
+            this.hasDoubleTapped = false;
+            // Charging mechanic
+            if (input.keys.up || input.touching) {
+                if (!this.isCharging) {
+                    this.isCharging = true;
+                    this.chargeStart = performance.now();
+                }
+                const chargeDuration = performance.now() - this.chargeStart;
+                let multiplier = this.type.trait === 'quick_charge' ? 1.2 : 1.0;
+                this.chargePercent = MathUtils.clamp((chargeDuration * multiplier) / CONFIG.chargeTimeMs, 0, 1);
+                
+                this.squash = MathUtils.lerp(1, 1.4, this.chargePercent);
+                this.stretch = MathUtils.lerp(1, 0.6, this.chargePercent);
+                
+                let moveSpeed = 2;
+                if (input.keys.left) { this.x -= moveSpeed; this.direction = -1; }
+                if (input.keys.right) { this.x += moveSpeed; this.direction = 1; }
+            } else {
+                if (this.isCharging) {
+                    this.jump();
+                } else {
+                    let moveSpeed = 5;
+                    this.vx *= 0.8; // friction
+                    if (input.keys.left) { this.vx = -moveSpeed; this.direction = -1; }
+                    if (input.keys.right) { this.vx = moveSpeed; this.direction = 1; }
+                }
+                this.squash += (1 - this.squash) * 0.2;
+                this.stretch += (1 - this.stretch) * 0.2;
+            }
+        } else {
+            let airControl = 0.5;
+            if (input.keys.left) { this.vx -= airControl; this.direction = -1; }
+            if (input.keys.right) { this.vx += airControl; this.direction = 1; }
+            this.vx *= 0.95;
+
+            // Zip Double Tap Trait
+            if (this.type.trait === 'double_tap' && !this.hasDoubleTapped && (input.keys.up || input.touching)) {
+                // Must release first to double tap, simplified here (would normally track key press event)
+                // For simplicity, we just trigger it if they press up while falling
+                if (this.vy > 0 && input.keys.up) {
+                   this.vy = -8;
+                   this.hasDoubleTapped = true;
+                   Game.particles.spawn(this.x + this.width/2, this.y + this.height, 5, '#F44336');
+                }
+            }
+
+            this.squash += (0.8 - this.squash) * 0.1;
+            this.stretch += (1.2 - this.stretch) * 0.1;
+        }
+    }
+
+    updateAI() {
+        if (!this.isGrounded) return; // AI doesn't air strafe much
+
+        if (this.aiWaitTime > 0) {
+            this.aiWaitTime -= 16;
+            return;
+        }
+
+        if (!this.isCharging) {
+            // Pick a platform slightly above us
+            let candidates = Game.platforms.filter(p => p.y < this.y && p.y > this.y - 300);
+            if (candidates.length > 0) {
+                this.aiTargetPlatform = candidates[MathUtils.randInt(0, candidates.length - 1)];
+                this.isCharging = true;
+                this.chargeStart = performance.now() - MathUtils.rand(0, 500); // Pre-charge slightly
+            } else {
+                // Default vertical jump if no platform found
+                this.aiTargetPlatform = { x: this.x, y: this.y - 200, width: 50 };
+                this.isCharging = true;
+                this.chargeStart = performance.now();
+            }
+        }
+
+        if (this.isCharging && this.aiTargetPlatform) {
+            const dy = this.y - this.aiTargetPlatform.y;
+            const dx = (this.aiTargetPlatform.x + this.aiTargetPlatform.width/2) - (this.x + this.width/2);
+            
+            // Move towards X
+            if (dx < -10) { this.x -= 2; this.direction = -1; }
+            else if (dx > 10) { this.x += 2; this.direction = 1; }
+
+            // Charge target based on distance
+            let targetCharge = MathUtils.clamp(dy / 250, 0.2, 1.0);
+            
+            const chargeDuration = performance.now() - this.chargeStart;
+            this.chargePercent = MathUtils.clamp(chargeDuration / CONFIG.chargeTimeMs, 0, 1);
+            
+            this.squash = MathUtils.lerp(1, 1.4, this.chargePercent);
+            this.stretch = MathUtils.lerp(1, 0.6, this.chargePercent);
+
+            if (this.chargePercent >= targetCharge) {
+                // Add minor AI inaccuracy based on difficulty (hardcoded Medium here)
+                this.chargePercent *= MathUtils.rand(0.9, 1.1);
+                this.chargePercent = MathUtils.clamp(this.chargePercent, 0, 1);
+                this.jump();
+                this.aiWaitTime = MathUtils.rand(500, 1500);
+            }
+        }
+    }
+
+    jump() {
+        this.isCharging = false;
+        let force = MathUtils.lerp(CONFIG.baseJumpForce, CONFIG.maxJumpForce, this.chargePercent);
+        this.vy = force;
+        
+        // Add horizontal velocity if moving
+        if (this.vx !== 0) this.vx *= 1.5;
+
+        this.isGrounded = false;
+        let bumpPower = this.chargePercent; // Store for bump damage
+        this.lastBumpPower = bumpPower;
+        this.chargePercent = 0;
+        AudioSys.jump();
+        
+        this.squash = 0.5;
+        this.stretch = 1.5;
+        
+        Game.particles.spawn(this.x + this.width/2, this.y + this.height, 10, '#fff');
+    }
+
+    collideWithFrog(other) {
+        if (this.dead || other.dead || this.id === other.id) return;
+
+        // Check AABB
+        if (MathUtils.checkAABB(this, other)) {
+            let dx = (this.x + this.width/2) - (other.x + other.width/2);
+            let dy = (this.y + this.height/2) - (other.y + other.height/2);
+            
+            // Vertical Bump (Landing on someone)
+            if (Math.abs(dy) > Math.abs(dx) && this.vy > 0 && dy < 0) {
+                let bounceForce = -10;
+                let pushForce = 5;
+                if (this.type.trait === 'grumpy_stomp') pushForce = 8;
+                
+                this.vy = bounceForce;
+                other.vy = pushForce;
+                
+                // Sturdy Landing resistance
+                if (other.type.trait === 'sturdy_landing') other.vy *= 0.5;
+
+                Game.particles.spawn(this.x + this.width/2, this.y + this.height, 8, '#FFEB3B');
+                AudioSys.land(); // Bump sound
+            } 
+            // Horizontal Bump (Mid-air collision)
+            else {
+                let power = (this.lastBumpPower || 0.5) + (other.lastBumpPower || 0.5);
+                let push = dx > 0 ? 5 * power : -5 * power;
+                
+                if (this.type.trait === 'sturdy_landing') push *= 0.5;
+                if (other.type.trait === 'sturdy_landing') push *= 2; 
+
+                this.vx += push;
+                other.vx -= push;
+                
+                this.stunned = 200;
+                other.stunned = 200;
+
+                Game.particles.spawn(this.x + this.width/2, this.y + this.height/2, 5, '#F44336');
+            }
+        }
+    }
+
+    draw(ctx) {
+        if(this.dead) return;
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height); // Bottom center
+        
+        // Apply flip based on direction
+        ctx.scale(this.direction, 1);
+        
+        ctx.scale(1/this.squash, 1/this.stretch);
+        
+        // Draw Frog Body
+        ctx.fillStyle = this.type.color;
+        ctx.beginPath();
+        // Base rounded rect kinda
+        ctx.ellipse(0, -this.height/2, this.width/2, this.height/2, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#000';
+        ctx.stroke();
+
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(8, -this.height + 4, 8, 0, Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.fillStyle = '#000'; // Pupil
+        ctx.beginPath();
+        ctx.arc(10, -this.height + 4, 3, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Decor secondary color
+        if(this.type.secondary) {
+            ctx.fillStyle = this.type.secondary;
+            ctx.beginPath();
+            ctx.arc(-5, -this.height/2, 6, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+}
+
+class Platform {
+    constructor(x, y, w, type) {
+        this.x = x;
+        this.y = y;
+        this.width = w;
+        this.height = CONFIG.platformHeight;
+        this.type = type || 'normal'; // normal, moving, bouncing, leaf, slippery, cloud
+        this.vx = type === 'moving' || type === 'cloud' ? (Math.random() > 0.5 ? 2 : -2) : 0;
+        this.life = type === 'cloud' ? 1.0 : -1;
+    }
+
+    update() {
+        if (this.type === 'moving' || this.type === 'cloud') {
+            this.x += this.vx;
+            if (this.x < 0 || this.x + this.width > CONFIG.worldWidth) {
+                this.vx *= -1;
+            }
+        }
+        if (this.life > 0 && this.life < 1.0) {
+            this.life -= 0.02; // Disappears over time after being landed on
+        }
+    }
+
+    draw(ctx, theme) {
+        if (this.life === 0) return; // Disappeared
+        
+        ctx.globalAlpha = this.life > 0 ? this.life : 1.0;
+        
+        let color = theme.pColor || '#4CAF50';
+        if (this.type === 'bouncing') color = theme.bounceColor || '#E91E63';
+        if (this.type === 'leaf') color = theme.leafColor || '#8BC34A';
+        if (this.type === 'slippery') color = theme.slipperyColor || '#80DEEA';
+        if (this.type === 'cloud') color = theme.cloudColor || '#ECEFF1';
+        
+        ctx.fillStyle = color;
+        
+        ctx.beginPath();
+        if (this.type === 'cloud') {
+             ctx.ellipse(this.x + this.width/2, this.y + this.height/2, this.width/2, this.height, 0, 0, Math.PI*2);
+        } else {
+             ctx.roundRect(this.x, this.y, this.width, this.height, 8);
+        }
+        ctx.fill();
+        
+        // Depth
+        if(this.type !== 'cloud') {
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.roundRect(this.x, this.y + this.height - 4, this.width, 4, {bottomLeft: 8, bottomRight: 8});
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class Fly {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 16;
+        this.height = 16;
+        this.active = true;
+        this.hoverOffset = Math.random() * Math.PI * 2;
+    }
+    
+    update(dt) {
+        this.y += Math.sin(performance.now() / 200 + this.hoverOffset) * 0.5;
+    }
+
+    draw(ctx) {
+        if(!this.active) return;
+        ctx.fillStyle = '#8BC34A';
+        ctx.beginPath();
+        ctx.arc(this.x + 8, this.y + 8, 8, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Wings
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath();
+        ctx.ellipse(this.x, this.y + 4, 8, 4, -Math.PI/4, 0, Math.PI*2);
+        ctx.ellipse(this.x + 16, this.y + 4, 8, 4, Math.PI/4, 0, Math.PI*2);
+        ctx.fill();
+    }
+}
+
+class ParticleSystem {
+    constructor() {
+        this.particles = [];
+    }
+    spawn(x, y, count, color) {
+        for(let i=0; i<count; i++) {
+            this.particles.push({
+                x: x, y: y,
+                vx: MathUtils.rand(-3, 3),
+                vy: MathUtils.rand(-3, 1),
+                life: 1,
+                color: color,
+                size: MathUtils.rand(2, 6)
+            });
+        }
+    }
+    update() {
+        for(let i=this.particles.length-1; i>=0; i--) {
+            let p = this.particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life -= 0.02;
+            if(p.life <= 0) this.particles.splice(i, 1);
+        }
+    }
+    draw(ctx) {
+        this.particles.forEach(p => {
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+        });
+    }
+}
+
+// --- MAIN ENGINE ---
+const Game = {
+    canvas: null,
+    ctx: null,
+    w: 0,
+    h: 0,
+    scale: 1,
+    
+    state: 'menu', // menu, char_select, theme_select, play, over
+    
+    selectedFrogId: 'Racer',
+    selectedThemeId: 'Meadows',
+    selectedMode: 'survival',
+    frogs: [], // array of all frogs (player[0] + AI)
+    platforms: [],
+    flies: [],
+    particles: new ParticleSystem(),
+    
+    cameraY: 0,
+    maxHeight: 0,
+    score: 0,
+    flyCount: 0,
+    
+    highestPlatformY: 0,
+
+    input: [
+        { keys: { left: false, right: false, up: false }, touching: false },
+        { keys: { left: false, right: false, up: false }, touching: false }
+    ],
+
+    init() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        
+        // Setup Resize
+        window.addEventListener('resize', () => this.resize());
+        this.resize();
+
+        // Setup Input
+        this.setupInput();
+
+        // Setup UI
+        document.getElementById('btn-play').addEventListener('click', () => {
+            if(!AudioSys.ctx) AudioSys.init();
+            this.selectedMode = 'quick';
+            this.showCharacterSelect();
+        });
+        document.getElementById('btn-survival').addEventListener('click', () => {
+            if(!AudioSys.ctx) AudioSys.init();
+            this.selectedMode = 'survival';
+            this.showCharacterSelect();
+        });
+        document.getElementById('btn-local').addEventListener('click', () => {
+            if(!AudioSys.ctx) AudioSys.init();
+            this.selectedMode = 'local';
+            this.showCharacterSelect();
+        });
+        document.getElementById('btn-to-theme').addEventListener('click', () => {
+            this.showThemeSelect();
+        });
+        document.getElementById('btn-start-race').addEventListener('click', () => {
+            this.start(this.selectedMode);
+        });
+        document.getElementById('btn-restart').addEventListener('click', () => this.start(this.selectedMode));
+        document.getElementById('btn-menu').addEventListener('click', () => {
+            document.getElementById('game-over').classList.remove('active');
+            document.getElementById('menu').classList.add('active');
+            document.getElementById('hud').style.display = 'none';
+        });
+
+        this.buildCharacterSelect();
+        this.buildThemeSelect();
+        requestAnimationFrame((dt) => this.loop(dt));
+    },
+
+    buildCharacterSelect() {
+        const list = document.getElementById('frog-list');
+        list.innerHTML = '';
+        for (let key in FROGS) {
+            let frog = FROGS[key];
+            let card = document.createElement('div');
+            card.style.cssText = `
+                width: 100px; height: 120px; background: rgba(0,0,0,0.5); 
+                border: 2px solid ${frog.color}; border-radius: 10px;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                cursor: pointer; padding: 10px; color: white; text-align: center; font-size: 0.8rem;
+                transition: transform 0.2s, background 0.2s;
+            `;
+            card.innerHTML = `
+                <div style="width: 40px; height: 40px; background: ${frog.color}; border-radius: 50%; border: 2px solid #000; margin-bottom: 5px; position:relative;">
+                    <div style="position: absolute; top: 10px; left: 8px; width: 6px; height:6px; background:#fff; border-radius:50%;"></div>
+                    <div style="position: absolute; top: 10px; right: 8px; width: 6px; height:6px; background:#fff; border-radius:50%;"></div>
+                </div>
+                <b>${frog.name}</b>
+            `;
+            card.onclick = () => {
+                document.querySelectorAll('#frog-list div').forEach(el => el.style.background = 'rgba(0,0,0,0.5)');
+                card.style.background = frog.color;
+                this.selectedFrogId = key;
+            };
+            list.appendChild(card);
+        }
+    },
+
+    showCharacterSelect() {
+        document.getElementById('menu').classList.remove('active');
+        document.getElementById('character-select').classList.add('active');
+    },
+
+    buildThemeSelect() {
+        const list = document.getElementById('theme-list');
+        list.innerHTML = '';
+        for (let key in THEMES) {
+            let theme = THEMES[key];
+            let card = document.createElement('div');
+            card.style.cssText = `
+                width: 120px; height: 80px; background: rgba(0,0,0,0.5); 
+                border: 2px solid ${theme.bg}; border-radius: 10px;
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                cursor: pointer; padding: 10px; color: white; text-align: center; font-size: 0.8rem;
+                transition: transform 0.2s, background 0.2s;
+            `;
+            card.innerHTML = `<b>${theme.name}</b>`;
+            card.onclick = () => {
+                document.querySelectorAll('#theme-list div').forEach(el => el.style.background = 'rgba(0,0,0,0.5)');
+                card.style.background = theme.bg;
+                this.selectedThemeId = key;
+            };
+            list.appendChild(card);
+        }
+    },
+
+    showThemeSelect() {
+        document.getElementById('character-select').classList.remove('active');
+        document.getElementById('theme-select').classList.add('active');
+    },
+
+    start(mode) {
+        document.getElementById('theme-select').classList.remove('active');
+        document.getElementById('menu').classList.remove('active');
+        document.getElementById('game-over').classList.remove('active');
+        document.getElementById('hud').style.display = 'flex';
+        document.getElementById('touch-controls').style.display = 'block';
+
+        this.frogs = [];
+        // Player 1
+        this.frogs.push(new Frog(this.w / 2, this.h - 100, FROGS[this.selectedFrogId], false, 0));
+        
+        if (mode === 'quick') {
+            // Add 3 AI Opponents
+            const frogTypes = Object.values(FROGS);
+            for(let i=0; i<3; i++) {
+                let type = frogTypes[MathUtils.randInt(1, frogTypes.length-1)];
+                this.frogs.push(new Frog(this.w / 2 + MathUtils.rand(-50, 50), this.h - 100, type, true));
+            }
+        } else if (mode === 'local') {
+            let keys = Object.keys(FROGS);
+            let p2Type = FROGS[keys[(keys.indexOf(this.selectedFrogId) + 1) % keys.length]];
+            this.frogs.push(new Frog(this.w / 2 + 40, this.h - 100, p2Type, false, 1));
+        }
+
+        this.cameraY = 0;
+        this.maxHeight = 0;
+        this.score = 0;
+        this.flyCount = 0;
+        this.platforms = [];
+        this.flies = [];
+        this.highestPlatformY = this.h;
+
+        // Base platform
+        this.platforms.push(new Platform(0, this.h - 20, this.w, 'normal'));
+        
+        // Generate initial chunks
+        for(let i=0; i<15; i++) this.generateChunk();
+        
+        this.state = 'play';
+        this.updateHUD();
+    },
+
+    generateChunk() {
+        // Reduced gap distance for easier play
+        const gap = MathUtils.randInt(40, 80);
+        let y = this.highestPlatformY - gap;
+        // Increased platform width for easier landings
+        let w = MathUtils.randInt(150, 300);
+        let x = MathUtils.randInt(20, this.w - w - 20);
+        
+        let theme = THEMES[this.selectedThemeId];
+        let pTypes = theme.pTypes;
+        let type = pTypes[MathUtils.randInt(0, pTypes.length-1)];
+
+        this.platforms.push(new Platform(x, y, w, type));
+        if (Math.random() < 0.3) {
+            this.flies.push(new Fly(x + w/2 - 8, y - 40));
+        }
+        this.highestPlatformY = y;
+    },
+
+    update(dt) {
+        if(this.state !== 'play') return;
+
+        // Update Entities
+        this.frogs.forEach(f => f.update(dt, this.input[f.playerIndex || 0]));
+        this.platforms.forEach(p => p.update());
+        this.flies.forEach(f => f.update(dt));
+        this.particles.update();
+
+        // Frog-Frog Collisions
+        for(let a=0; a<this.frogs.length; a++) {
+            for(let b=a+1; b<this.frogs.length; b++) {
+                this.frogs[a].collideWithFrog(this.frogs[b]);
+            }
+        }
+
+        // Collision Logic: Frogs falling onto platforms
+        for(let f of this.frogs) {
+            if (f.vy >= 0) {
+                for(let plat of this.platforms) {
+                    // simple AABB, but only check if bottom of player is near top of platform
+                    if (f.y + f.height >= plat.y && 
+                        f.y + f.height - f.vy <= plat.y + plat.height &&
+                        f.x + f.width > plat.x && 
+                        f.x < plat.x + plat.width &&
+                        plat.life !== 0) {
+                        
+                        f.y = plat.y - f.height;
+                        f.vy = 0;
+                        f.isGrounded = true;
+                        
+                        if(plat.type === 'bouncing') {
+                            let bouncePwr = -18;
+                            if (f.type.trait === 'super_bounce') bouncePwr *= 1.25;
+                            f.vy = bouncePwr;
+                            f.isGrounded = false;
+                            if(!f.isAI) AudioSys.jump();
+                        } else if (plat.type === 'leaf') {
+                            if (f.type.trait !== 'sturdy_landing') {
+                                f.vx += f.direction * 0.5; // Slide
+                            }
+                        } else if (plat.type === 'slippery') {
+                            if (f.type.trait !== 'ice_slide') {
+                                f.vx += f.direction * 2; // Slide much faster
+                            }
+                        } else if (plat.type === 'cloud') {
+                            if(plat.life > 0.99) plat.life = 0.99; // start disappearing
+                        }
+                        
+                        if (f.vy === 0) {
+                            f.squash = 1.3;
+                            f.stretch = 0.7;
+                            if(!f.isAI) AudioSys.land();
+                            this.particles.spawn(f.x + f.width/2, plat.y, 5, plat.type === 'leaf' ? '#8BC34A' : '#bbb');
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Screen wrap/boundary
+            if (f.x < 0) { f.x = 0; f.vx *= -0.5; }
+            if (f.x + f.width > CONFIG.worldWidth) { f.x = CONFIG.worldWidth - f.width; f.vx *= -0.5; }
+        }
+
+        let activePlayers = this.frogs.filter(f => !f.dead && !f.isAI);
+
+        // Collectibles
+        for(let fly of this.flies) {
+            if(fly.active) {
+                for(let f of activePlayers) {
+                    if(MathUtils.checkAABB(f, fly)) {
+                        fly.active = false;
+                        this.flyCount++;
+                        this.score += 50;
+                        AudioSys.collect();
+                        this.particles.spawn(fly.x, fly.y, 10, '#8BC34A');
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Camera Logic revolves around highest surviving player
+        if (activePlayers.length > 0) {
+            let highestY = Math.min(...activePlayers.map(f => f.y));
+            let targetCamY = highestY - this.h * 0.6;
+            if (targetCamY < this.cameraY) {
+                this.cameraY += (targetCamY - this.cameraY) * 0.1;
+            }
+        }
+
+        // Score
+        if (-this.cameraY > this.maxHeight) {
+            this.maxHeight = -this.cameraY;
+            this.score = Math.floor(this.maxHeight / 10) + this.flyCount * 50;
+        }
+
+        // Infinite Generation
+        if (this.highestPlatformY > this.cameraY - this.h) {
+            this.generateChunk();
+        }
+
+        // Cleanup Offscreen (increased threshold)
+        this.platforms = this.platforms.filter(p => p.y < this.cameraY + this.h + 800);
+        this.flies = this.flies.filter(f => f.y < this.cameraY + this.h + 800 && f.active);
+
+        // Death conditions
+        for(let f of this.frogs) {
+            // Give players more room to fall below the camera before dying
+            if (!f.dead && f.y > this.cameraY + this.h + 700) {
+                f.dead = true;
+                this.particles.spawn(f.x + f.width/2, this.cameraY + this.h, 20, f.type.color);
+                if (!f.isAI) AudioSys.splash();
+            }
+        }
+
+        let alivePlayersNow = this.frogs.filter(f => !f.dead && !f.isAI);
+        if (alivePlayersNow.length === 0 && this.state === 'play') {
+            this.gameOver();
+        }
+
+        this.updateHUD();
+    },
+
+    gameOver() {
+        if(this.state === 'over') return;
+        this.state = 'over';
+        AudioSys.splash();
+        document.getElementById('hud').style.display = 'none';
+        document.getElementById('touch-controls').style.display = 'none';
+        document.getElementById('charge-container').style.display = 'none';
+        
+        setTimeout(() => {
+            document.getElementById('game-over').classList.add('active');
+            document.getElementById('final-score').innerText = this.score;
+        }, 1000);
+    },
+
+    updateHUD() {
+        document.getElementById('score').innerText = this.score;
+        document.getElementById('flies').innerText = this.flyCount;
+        
+        let cc = document.getElementById('charge-container');
+        let cb = document.getElementById('charge-bar');
+        
+        let player = this.frogs.find(f => !f.isAI && !f.dead);
+        
+        if(this.state === 'play' && player && player.isGrounded && player.isCharging) {
+            cc.style.display = 'block';
+            cb.style.width = (player.chargePercent * 100) + "%";
+        } else {
+            cc.style.display = 'none';
+            cb.style.width = "0%";
+        }
+    },
+
+    draw(ctx) {
+        let theme = THEMES[this.selectedThemeId];
+        
+        // Draw background
+        ctx.fillStyle = theme.bg || '#4FC3F7'; // sky/water
+        ctx.fillRect(0, 0, this.w, this.h);
+
+        // Draw scenery layers (parallax)
+        ctx.save();
+        ctx.translate(0, (-this.cameraY * 0.2) % 400);
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        for(let i=0; i<5; i++) {
+            ctx.beginPath();
+            ctx.arc(100 + i*200, 200, 50, 0, Math.PI*2);
+            ctx.fill();
+        }
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(0, -this.cameraY);
+
+        this.platforms.forEach(p => p.draw(ctx, theme));
+        this.flies.forEach(f => f.draw(ctx));
+        this.particles.draw(ctx);
+        // Draw AI frogs first
+        this.frogs.filter(f => f.isAI).forEach(f => f.draw(ctx));
+        // Draw player on top
+        if(this.frogs[0]) this.frogs[0].draw(ctx);
+
+        ctx.restore();
+        
+        // Vignette
+        let gradient = ctx.createRadialGradient(this.w/2, this.h/2, this.h*0.4, this.w/2, this.h/2, this.h);
+        gradient.addColorStop(0, 'rgba(0,0,0,0)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.5)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0,0,this.w, this.h);
+    },
+
+    loop(timestamp) {
+        let dt = 16; // approx 60fps
+        this.update(dt);
+        this.draw(this.ctx);
+        requestAnimationFrame((ts) => this.loop(ts));
+    },
+
+    resize() {
+        const container = document.getElementById('game-container');
+        this.w = CONFIG.worldWidth;
+        this.h = CONFIG.worldWidth * (container.clientHeight / container.clientWidth);
+        this.canvas.width = this.w;
+        this.canvas.height = this.h;
+        this.scale = container.clientWidth / this.w;
+    },
+
+    setupInput() {
+        const handleKey = (e, isDown) => {
+            if(e.code === 'KeyA') this.input[0].keys.left = isDown;
+            if(e.code === 'KeyD') this.input[0].keys.right = isDown;
+            if(e.code === 'KeyW' || e.code === 'Space') this.input[0].keys.up = isDown;
+            
+            if(e.code === 'ArrowLeft') this.input[1].keys.left = isDown;
+            if(e.code === 'ArrowRight') this.input[1].keys.right = isDown;
+            if(e.code === 'ArrowUp') this.input[1].keys.up = isDown;
+        };
+        window.addEventListener('keydown', e => handleKey(e, true));
+        window.addEventListener('keyup', e => handleKey(e, false));
+
+        const tLeft = document.getElementById('touch-left');
+        const tRight = document.getElementById('touch-right');
+        
+        const touchHandler = (e, dir, isDown) => {
+            e.preventDefault();
+            this.input[0].touching = isDown;
+            if(dir === 'left') this.input[0].keys.left = isDown;
+            if(dir === 'right') this.input[0].keys.right = isDown;
+            if(!isDown) { this.input[0].keys.left = false; this.input[0].keys.right = false; }
+        };
+
+        tLeft.addEventListener('touchstart', e => touchHandler(e, 'left', true), {passive: false});
+        tLeft.addEventListener('touchend', e => touchHandler(e, 'left', false), {passive: false});
+        tRight.addEventListener('touchstart', e => touchHandler(e, 'right', true), {passive: false});
+        tRight.addEventListener('touchend', e => touchHandler(e, 'right', false), {passive: false});
+    }
+};
+
+window.onload = () => Game.init();
+</script>
+</body>
+</html>
