@@ -1081,14 +1081,44 @@
                 tContainer.userData = { type: 'dummy', hp: 100, active: true, head: head, body: body };
             } 
             else if (targetType === 'realman') {
-                const mSkin = new THREE.MeshStandardMaterial({color: 0xdca982});
-                const mClothes = new THREE.MeshStandardMaterial({color: 0x47493a}); // Military camo green/brown
-                const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), mClothes);
-                body.position.y = 0.6; body.castShadow = true;
+                const mSkin = new THREE.MeshStandardMaterial({color: 0xffff00}); // Yellow skin
+                const mClothes = new THREE.MeshStandardMaterial({color: 0xffffff}); // White clothes
+                
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.4), mClothes);
+                body.position.y = 1.4; body.castShadow = true;
+                
                 const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mSkin);
-                head.position.y = 1.4; head.castShadow = true;
-                tContainer.add(body); tContainer.add(head);
-                tContainer.userData = { type: 'realman', hp: 100, active: true, head: head, body: body };
+                head.position.y = 2.1; head.castShadow = true;
+                
+                const armLGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25); armLGeo.translate(0, -0.3, 0); 
+                const armL = new THREE.Mesh(armLGeo, mClothes);
+                armL.position.set(-0.55, 1.8, 0); armL.castShadow = true;
+
+                const armRGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25); armRGeo.translate(0, -0.3, 0);
+                const armR = new THREE.Mesh(armRGeo, mClothes);
+                armR.position.set(0.55, 1.8, 0); armR.castShadow = true;
+                
+                const legLGeo = new THREE.BoxGeometry(0.3, 1.0, 0.3); legLGeo.translate(0, -0.5, 0);
+                const legL = new THREE.Mesh(legLGeo, mClothes);
+                legL.position.set(-0.2, 0.9, 0); legL.castShadow = true;
+
+                const legRGeo = new THREE.BoxGeometry(0.3, 1.0, 0.3); legRGeo.translate(0, -0.5, 0);
+                const legR = new THREE.Mesh(legRGeo, mClothes);
+                legR.position.set(0.2, 0.9, 0); legR.castShadow = true;
+
+                tContainer.add(body); tContainer.add(head); 
+                tContainer.add(armL); tContainer.add(armR); 
+                tContainer.add(legL); tContainer.add(legR);
+
+                tContainer.userData = { 
+                    type: 'realman', hp: 100, active: true, 
+                    head: head, body: body, 
+                    armL: armL, armR: armR, legL: legL, legR: legR,
+                    timeOffset: Math.random() * 100,
+                    walkDir: Math.random() > 0.5 ? 1 : -1,
+                    walkSpeed: 4 + Math.random() * 4,
+                    originX: 0
+                };
             } 
             else if (targetType === 'hologram') {
                 const mat = new THREE.MeshBasicMaterial({color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.8});
@@ -1122,7 +1152,7 @@
             let angle = (Math.random() - 0.5) * Math.PI;
             tContainer.position.x = Math.sin(angle) * dist;
             tContainer.position.z = -Math.cos(angle) * dist;
-            if(targetType === 'drone') {
+            if(targetType === 'drone' || targetType === 'realman') {
                 tContainer.userData.originX = tContainer.position.x;
                 tContainer.userData.originZ = tContainer.position.z;
             }
@@ -1152,8 +1182,25 @@
                 // Active logic
                 if (t.userData.type === 'hologram') {
                     t.userData.mesh.rotation.z += dt * t.userData.spinSpeed;
-                } else if (t.userData.type === 'dummy' || t.userData.type === 'vip' || t.userData.type === 'realman') {
+                } else if (t.userData.type === 'dummy' || t.userData.type === 'vip') {
                     t.scale.y = 1 + Math.sin(Date.now()*0.005)*0.02;
+                } else if (t.userData.type === 'realman') {
+                    t.userData.timeOffset += dt * t.userData.walkSpeed;
+                    let tAnim = t.userData.timeOffset;
+                    
+                    t.userData.armL.rotation.x = Math.sin(tAnim) * 0.8;
+                    t.userData.armR.rotation.x = Math.sin(tAnim + Math.PI) * 0.8;
+                    t.userData.legL.rotation.x = Math.sin(tAnim + Math.PI) * 0.8;
+                    t.userData.legR.rotation.x = Math.sin(tAnim) * 0.8;
+                    
+                    t.position.x += t.userData.walkDir * t.userData.walkSpeed * dt;
+                    
+                    if (Math.abs(t.position.x - t.userData.originX) > 15) {
+                        t.userData.walkDir *= -1; 
+                    }
+                    
+                    t.rotation.y = t.userData.walkDir > 0 ? Math.PI/2 : -Math.PI/2;
+                    t.position.y = Math.abs(Math.sin(tAnim)) * 0.1;
                 } else if (t.userData.type === 'drone') {
                     t.userData.time += dt;
                     t.userData.ring.rotation.z += dt * 10;
