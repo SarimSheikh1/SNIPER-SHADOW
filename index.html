@@ -533,6 +533,7 @@
                 <div class="select-row" id="mode-selector">
                     <button class="opt-btn active" data-mode="elimination">Elimination</button>
                     <button class="opt-btn" data-mode="rescue">VIP Rescue</button>
+                    <button class="opt-btn" data-mode="human">Real Man</button>
                 </div>
             </div>
 
@@ -1053,6 +1054,8 @@
             
             if (currentMode === 'rescue' && Math.random() < 0.25) {
                 targetType = 'vip'; // Spawn a friendly VIP
+            } else if (currentMode === 'human' && targetType === 'dummy') {
+                targetType = 'realman'; // Spawn a human enemy
             }
             
             const tContainer = new THREE.Group();
@@ -1076,6 +1079,16 @@
                 head.position.y = 1.4; head.castShadow = true;
                 tContainer.add(body); tContainer.add(head);
                 tContainer.userData = { type: 'dummy', hp: 100, active: true, head: head, body: body };
+            } 
+            else if (targetType === 'realman') {
+                const mSkin = new THREE.MeshStandardMaterial({color: 0xdca982});
+                const mClothes = new THREE.MeshStandardMaterial({color: 0x47493a}); // Military camo green/brown
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), mClothes);
+                body.position.y = 0.6; body.castShadow = true;
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mSkin);
+                head.position.y = 1.4; head.castShadow = true;
+                tContainer.add(body); tContainer.add(head);
+                tContainer.userData = { type: 'realman', hp: 100, active: true, head: head, body: body };
             } 
             else if (targetType === 'hologram') {
                 const mat = new THREE.MeshBasicMaterial({color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.8});
@@ -1122,7 +1135,7 @@
             for(let i=targets.length-1; i>=0; i--) {
                 let t = targets[i];
                 if (!t.userData.active) {
-                    if (t.userData.type === 'dummy' || t.userData.type === 'vip') {
+                    if (t.userData.type === 'dummy' || t.userData.type === 'vip' || t.userData.type === 'realman') {
                         t.rotation.x = lerp(t.rotation.x, -Math.PI/2, dt * 5);
                         t.position.y = lerp(t.position.y, -0.4, dt * 5);
                     } else if (t.userData.type === 'hologram') {
@@ -1139,7 +1152,7 @@
                 // Active logic
                 if (t.userData.type === 'hologram') {
                     t.userData.mesh.rotation.z += dt * t.userData.spinSpeed;
-                } else if (t.userData.type === 'dummy' || t.userData.type === 'vip') {
+                } else if (t.userData.type === 'dummy' || t.userData.type === 'vip' || t.userData.type === 'realman') {
                     t.scale.y = 1 + Math.sin(Date.now()*0.005)*0.02;
                 } else if (t.userData.type === 'drone') {
                     t.userData.time += dt;
@@ -1302,7 +1315,7 @@
                 let damage = 50 * currentWeapon.damageMulti;
                 let pType = 'normal';
                 
-                if (parent.userData.type === 'dummy') {
+                if (parent.userData.type === 'dummy' || parent.userData.type === 'realman') {
                     if (hit.object === parent.userData.head) {
                         isHeadshot = true; damage *= 2.5; pType = 'headshot';
                         parent.userData.head.rotation.x = -Math.PI/4;
