@@ -295,6 +295,7 @@
             transition: all 0.2s;
             pointer-events: auto;
             flex: 1;
+            min-width: 120px;
             text-align: center;
         }
         .opt-btn.active {
@@ -544,6 +545,11 @@
                     <button class="opt-btn" data-theme="night">Night City</button>
                     <button class="opt-btn" data-theme="desert">Desert Canyon</button>
                     <button class="opt-btn active" data-theme="snow">Snow Peak</button>
+                    <button class="opt-btn" data-theme="cyber">Cyberpunk</button>
+                    <button class="opt-btn" data-theme="swamp">Toxic Swamp</button>
+                    <button class="opt-btn" data-theme="mars">Mars Base</button>
+                    <button class="opt-btn" data-theme="blood">Blood Moon</button>
+                    <button class="opt-btn" data-theme="neon">Neon Dream</button>
                 </div>
             </div>
 
@@ -578,6 +584,68 @@
         // --- AUDIO SYNTHESIS SYSTEM ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
+        let isBgMusicPlaying = false;
+        function startBackgroundMusic() {
+            if (isBgMusicPlaying) return;
+            isBgMusicPlaying = true;
+            
+            const bassOsc = audioCtx.createOscillator();
+            bassOsc.type = 'sawtooth';
+            bassOsc.frequency.value = 40; 
+            
+            const lfo = audioCtx.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 0.2; 
+            
+            const vca = audioCtx.createGain();
+            vca.gain.value = 0.1;
+            
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 200;
+            
+            const lfoAmt = audioCtx.createGain();
+            lfoAmt.gain.value = 150;
+            lfo.connect(lfoAmt);
+            lfoAmt.connect(filter.frequency);
+            
+            bassOsc.connect(filter);
+            filter.connect(vca);
+            vca.connect(audioCtx.destination);
+            
+            bassOsc.start();
+            lfo.start();
+
+            let notes = [220, 261.63, 329.63, 392.00]; 
+            let noteIdx = 0;
+            setInterval(() => {
+                if (audioCtx.state === 'running' && currentState === GameState.PLAYING) {
+                    const t = audioCtx.currentTime;
+                    const arp = audioCtx.createOscillator();
+                    arp.type = 'square';
+                    arp.frequency.setValueAtTime(notes[noteIdx], t);
+                    
+                    const arpGain = audioCtx.createGain();
+                    arpGain.gain.setValueAtTime(0.05, t);
+                    arpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+                    
+                    const arpFilter = audioCtx.createBiquadFilter();
+                    arpFilter.type = 'bandpass';
+                    arpFilter.frequency.setValueAtTime(1000 + Math.random()*2000, t);
+                    
+                    arp.connect(arpFilter);
+                    arpFilter.connect(arpGain);
+                    arpGain.connect(audioCtx.destination);
+                    
+                    arp.start(t);
+                    arp.stop(t + 0.2);
+                    
+                    noteIdx = (noteIdx + 1) % notes.length;
+                    if (Math.random() > 0.8) noteIdx = Math.floor(Math.random() * notes.length);
+                }
+            }, 200);
+        }
+
         const Sounds = {
             shoot: (profile) => {
                 const t = audioCtx.currentTime;
@@ -731,7 +799,12 @@
         const ThemeProfiles = {
             night: { bg: 0x050a0f, floor: 0x112233, light: 0xaaccff, ambient: 0x444444, pType: 'rain' },
             desert: { bg: 0xcc8844, floor: 0xaa6633, light: 0xffddaa, ambient: 0x886644, pType: 'sand' },
-            snow: { bg: 0xddddff, floor: 0xffffff, light: 0xffffff, ambient: 0x8888aa, pType: 'snow' }
+            snow: { bg: 0xddddff, floor: 0xffffff, light: 0xffffff, ambient: 0x8888aa, pType: 'snow' },
+            cyber: { bg: 0x1a0033, floor: 0x220044, light: 0xff00ff, ambient: 0x00ffff, pType: 'cyberrain' },
+            swamp: { bg: 0x002200, floor: 0x113311, light: 0x88ff00, ambient: 0x004400, pType: 'acid' },
+            mars: { bg: 0xaa2200, floor: 0x881100, light: 0xff6600, ambient: 0x441111, pType: 'sand' },
+            blood: { bg: 0xcc0000, floor: 0x550000, light: 0xffaaaa, ambient: 0x440000, pType: 'bloodrain' },
+            neon: { bg: 0x000000, floor: 0x110022, light: 0x00ffff, ambient: 0xff00ff, pType: 'rainbow' }
         };
 
         // --- GAME STATE ---
@@ -777,6 +850,22 @@
                     child.receiveShadow = true;
                 }
             });
+            // Upgrade Menu NPC
+            if (npcGroup && window.THREE.SkeletonUtils) {
+                npcGroup.clear();
+                const menuSoldier = THREE.SkeletonUtils.clone(loadedSoldier);
+                const mixer = new THREE.AnimationMixer(menuSoldier);
+                if (soldierAnimations && soldierAnimations.length > 0) {
+                    const idleAnim = mixer.clipAction(soldierAnimations.find(a => a.name.toLowerCase().includes('idle')) || soldierAnimations[0]);
+                    idleAnim.play();
+                }
+                menuSoldier.scale.set(3.5, 3.5, 3.5);
+                menuSoldier.position.y = -1;
+                npcGroup.add(menuSoldier);
+                npcGroup.userData.mixer = mixer;
+                npcGroup.userData.head = menuSoldier; // Disable standard look
+                npcGroup.position.set(-2, -1, -6);
+            }
         });
 
         scene.background = new THREE.Color(currentTheme.bg);
@@ -837,27 +926,78 @@
             mapGroup.add(floor);
             
             // Scenery Generation
-            const geo1 = new THREE.BoxGeometry();
-            const geo2 = new THREE.CylinderGeometry(1, 1, 1, 8);
-            const matDark = new THREE.MeshStandardMaterial({color: 0x333333, roughness: 0.8});
+            const themeId = Object.keys(ThemeProfiles).find(k => ThemeProfiles[k] === theme);
             
-            for(let i=0; i<50; i++) {
-                const isBox = Math.random() > 0.3;
-                const obj = new THREE.Mesh(isBox ? geo1 : geo2, matDark);
+            for(let i=0; i<80; i++) {
+                let obj = new THREE.Group();
+                let x = (Math.random() - 0.5) * 250;
+                let z = -30 - Math.random() * 150;
+                if(Math.abs(x) < 15) x += 30 * Math.sign(x || 1);
                 
-                const w = 2 + Math.random() * 10;
-                const h = 2 + Math.random() * 20;
-                const d = 2 + Math.random() * 10;
-                obj.scale.set(w, h, d);
+                if (themeId === 'night' || themeId === 'cyber') {
+                    const matBldg = new THREE.MeshStandardMaterial({color: 0x111122, roughness: 0.7});
+                    const h = 10 + Math.random() * 40;
+                    const w = 5 + Math.random() * 10;
+                    const d = 5 + Math.random() * 10;
+                    
+                    const p1 = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matBldg);
+                    p1.position.y = h/2;
+                    obj.add(p1);
+                    
+                    if (Math.random() > 0.4) {
+                        const winColor = themeId === 'cyber' ? (Math.random() > 0.5 ? 0xff00ff : 0x00ffff) : 0xffffaa;
+                        const mWin = new THREE.MeshBasicMaterial({color: winColor});
+                        for(let w_i=0; w_i<4; w_i++) {
+                            const light = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.8), mWin);
+                            light.position.set((Math.random()-0.5)*w, Math.random()*h, (Math.random()-0.5)*d);
+                            obj.add(light);
+                        }
+                    }
+                }
+                else if (themeId === 'snow' || themeId === 'swamp') {
+                    const tHeight = 5 + Math.random() * 8;
+                    const mTrunk = new THREE.MeshStandardMaterial({color: 0x1a110a, roughness: 0.9});
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, tHeight), mTrunk);
+                    trunk.position.y = tHeight/2;
+                    obj.add(trunk);
+                    
+                    if (themeId === 'snow') {
+                        const mLeaves = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.8});
+                        for(let l=0; l<3; l++) {
+                            const leaf = new THREE.Mesh(new THREE.ConeGeometry(3 - l*0.5, 4, 8), mLeaves);
+                            leaf.position.y = tHeight/2 + 2 + l*2;
+                            obj.add(leaf);
+                        }
+                    }
+                }
+                else if (themeId === 'neon') {
+                    const nScale = 2 + Math.random() * 8;
+                    const mNeon = new THREE.MeshBasicMaterial({color: 0xff00ff, wireframe: true});
+                    const shape = new THREE.Mesh(new THREE.IcosahedronGeometry(nScale, 0), mNeon);
+                    shape.position.y = nScale + Math.random() * 10;
+                    shape.rotation.set(Math.random(), Math.random(), Math.random());
+                    obj.add(shape);
+                }
+                else if (themeId === 'blood') {
+                    const cHeight = 10 + Math.random() * 20;
+                    const mBlood = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.2, metalness: 0.8});
+                    const crystal = new THREE.Mesh(new THREE.ConeGeometry(2 + Math.random()*3, cHeight, 4), mBlood);
+                    crystal.position.y = cHeight/2;
+                    crystal.rotation.set((Math.random()-0.5)*0.2, Math.random(), (Math.random()-0.5)*0.2);
+                    obj.add(crystal);
+                }
+                else {
+                    const rScale = 5 + Math.random() * 15;
+                    const mRock = new THREE.MeshStandardMaterial({color: themeId==='mars' ? 0x661100 : 0xcc8844, roughness: 1.0});
+                    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rScale, 1), mRock);
+                    rock.position.y = rScale * 0.2;
+                    rock.rotation.set(Math.random(), Math.random(), Math.random());
+                    rock.scale.set(1, 1.5 + Math.random(), 1);
+                    obj.add(rock);
+                }
                 
-                // Keep out of immediate view
-                let x = (Math.random() - 0.5) * 200;
-                let z = -20 - Math.random() * 120;
-                if(Math.abs(x) < 10) x += 20 * Math.sign(x || 1);
-                
-                obj.position.set(x, h/2 - 2, z);
-                obj.castShadow = true;
-                obj.receiveShadow = true;
+                obj.position.set(x, -2, z);
+                obj.traverse(c => { if(c.isMesh) { c.castShadow = true; c.receiveShadow = true; }});
                 mapGroup.add(obj);
             }
             
@@ -882,6 +1022,10 @@
             let pColor = 0xffffff;
             if(type === 'rain') pColor = 0x88ccff;
             if(type === 'sand') pColor = 0xddaa55;
+            if(type === 'acid') pColor = 0x44ff44;
+            if(type === 'cyberrain') pColor = 0xff00ff;
+            if(type === 'bloodrain') pColor = 0xff0000;
+            if(type === 'rainbow') pColor = 0xffffff;
             
             const mat = new THREE.PointsMaterial({
                 color: pColor,
@@ -1090,16 +1234,16 @@
                 tContainer.userData = { type: 'vip', hp: 10, active: true, head: head, body: body };
             } 
             else if (targetType === 'dummy') {
-                const mRobo = new THREE.MeshStandardMaterial({color: 0xe62e00, metalness: 0.6, roughness: 0.4});
-                const mHead = new THREE.MeshStandardMaterial({color: 0x00ffcc, metalness: 0.9, roughness: 0.2, emissive: 0x003333});
-                const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.2, 3.0, 16), mRobo);
-                body.position.y = 1.5; body.castShadow = true;
+                const mRobo = new THREE.MeshStandardMaterial({color: 0xffffff, metalness: 0.3, roughness: 0.8});
+                const mHead = new THREE.MeshStandardMaterial({color: 0xffffff, emissive: 0x444444});
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.2, 7.0, 16), mRobo);
+                body.position.y = 3.5; body.castShadow = true;
                 const head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), mHead);
-                head.position.y = 3.8; head.castShadow = true;
-                const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 2.0, 8), mRobo);
-                armL.position.set(-1.8, 2.0, 0); armL.rotation.z = Math.PI / 4; armL.castShadow = true;
-                const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 2.0, 8), mRobo);
-                armR.position.set(1.8, 2.0, 0); armR.rotation.z = -Math.PI / 4; armR.castShadow = true;
+                head.position.y = 7.8; head.castShadow = true;
+                const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 4.0, 8), mRobo);
+                armL.position.set(-1.8, 4.5, 0); armL.rotation.z = Math.PI / 8; armL.castShadow = true;
+                const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 4.0, 8), mRobo);
+                armR.position.set(1.8, 4.5, 0); armR.rotation.z = -Math.PI / 8; armR.castShadow = true;
                 tContainer.add(body); tContainer.add(head); tContainer.add(armL); tContainer.add(armR);
                 tContainer.userData = { type: 'dummy', hp: 100, active: true, head: head, body: body };
             } 
@@ -1289,11 +1433,15 @@
             }
             npcGroup.visible = true;
             npcGroup.userData.animTime += dt;
-            // Breathe
-            npcGroup.scale.y = 1 + Math.sin(npcGroup.userData.animTime * 2) * 0.01;
-            // Look around slowly
-            if(Math.random() < 0.01) npcGroup.userData.targetHeadRot = (Math.random()-0.5) * 0.5;
-            npcGroup.userData.head.rotation.y = lerp(npcGroup.userData.head.rotation.y, npcGroup.userData.targetHeadRot, dt*2);
+            if (npcGroup.userData.mixer) {
+                npcGroup.userData.mixer.update(dt);
+            } else {
+                // Breathe
+                npcGroup.scale.y = 1 + Math.sin(npcGroup.userData.animTime * 2) * 0.01;
+                // Look around slowly
+                if(Math.random() < 0.01) npcGroup.userData.targetHeadRot = (Math.random()-0.5) * 0.5;
+                if(npcGroup.userData.head) npcGroup.userData.head.rotation.y = lerp(npcGroup.userData.head.rotation.y, npcGroup.userData.targetHeadRot, dt*2);
+            }
         }
 
         // --- PARTICLE SYSTEMS ---
@@ -1692,6 +1840,7 @@
 
         document.getElementById('btn-start').addEventListener('click', () => {
             if(audioCtx.state === 'suspended') audioCtx.resume();
+            startBackgroundMusic();
             document.getElementById('menu-layer').style.opacity = '0';
             setTimeout(() => {
                 document.getElementById('menu-layer').style.display = 'none';
@@ -1751,15 +1900,19 @@
                 // Weather
                 if(weatherSystem) {
                     let pos = weatherSystem.geometry.attributes.position.array;
-                    let speed = weatherSystem.userData.type === 'snow' ? 5 : (weatherSystem.userData.type === 'rain' ? 30 : 10);
+                    let t = weatherSystem.userData.type;
+                    let speed = t === 'snow' ? 5 : (t === 'rain' || t === 'acid' || t === 'cyberrain' || t === 'bloodrain' || t === 'rainbow' ? 30 : 10);
                     for(let i=1; i<pos.length; i+=3) {
                         pos[i] -= dt * speed;
                         if(pos[i] < 0) pos[i] = 80;
-                        if(weatherSystem.userData.type === 'snow' || weatherSystem.userData.type === 'sand') {
+                        if(t === 'snow' || t === 'sand') {
                             pos[i-1] += Math.sin(Date.now()*0.001 + i) * 0.05; // X sway
                         }
                     }
                     weatherSystem.geometry.attributes.position.needsUpdate = true;
+                    if (t === 'rainbow') {
+                        weatherSystem.material.color.setHSL((Date.now() % 2000) / 2000, 1, 0.5);
+                    }
                 }
                 
                 if (currentState === GameState.PLAYING) {
