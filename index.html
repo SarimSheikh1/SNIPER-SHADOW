@@ -570,6 +570,8 @@
 
     <!-- Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js"></script>
 
     <script>
         // --- AUDIO SYNTHESIS SYSTEM ---
@@ -760,6 +762,22 @@
         // --- THREE.JS SETUP ---
         const container = document.getElementById('game-container');
         const scene = new THREE.Scene();
+
+        let loadedSoldier = null;
+        let soldierAnimations = null;
+        const gltfLoader = new THREE.GLTFLoader();
+        gltfLoader.load('./assets/models/Soldier.glb', (gltf) => {
+            loadedSoldier = gltf.scene;
+            soldierAnimations = gltf.animations;
+            loadedSoldier.scale.set(1.5, 1.5, 1.5);
+            loadedSoldier.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+        });
+
         scene.background = new THREE.Color(currentTheme.bg);
         scene.fog = new THREE.FogExp2(currentTheme.bg, 0.015);
         
@@ -1081,44 +1099,69 @@
                 tContainer.userData = { type: 'dummy', hp: 100, active: true, head: head, body: body };
             } 
             else if (targetType === 'realman') {
-                const mSkin = new THREE.MeshStandardMaterial({color: 0xffff00}); // Yellow skin
-                const mClothes = new THREE.MeshStandardMaterial({color: 0xffffff}); // White clothes
-                
-                const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.4), mClothes);
-                body.position.y = 1.4; body.castShadow = true;
-                
-                const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mSkin);
-                head.position.y = 2.1; head.castShadow = true;
-                
-                const armLGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25); armLGeo.translate(0, -0.3, 0); 
-                const armL = new THREE.Mesh(armLGeo, mClothes);
-                armL.position.set(-0.55, 1.8, 0); armL.castShadow = true;
+                if (loadedSoldier && window.THREE.SkeletonUtils) {
+                    const personGroup = THREE.SkeletonUtils.clone(loadedSoldier);
+                    const mixer = new THREE.AnimationMixer(personGroup);
+                    
+                    if (soldierAnimations && soldierAnimations.length > 0) {
+                        const runAnim = mixer.clipAction(soldierAnimations.find(a => a.name.toLowerCase().includes('run')) || soldierAnimations[1] || soldierAnimations[0]);
+                        runAnim.play();
+                    }
+                    
+                    const headHitbox = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({visible: false}));
+                    headHitbox.position.y = 2.4; 
+                    personGroup.add(headHitbox);
+                    
+                    tContainer.add(personGroup);
+                    tContainer.userData = { 
+                        type: 'realman', hp: 100, active: true, 
+                        head: headHitbox, body: personGroup,
+                        mixer: mixer,
+                        timeOffset: Math.random() * 100,
+                        walkDir: Math.random() > 0.5 ? 1 : -1,
+                        walkSpeed: 3 + Math.random() * 2,
+                        originX: 0
+                    };
+                } else {
+                    const mSkin = new THREE.MeshStandardMaterial({color: 0xffff00}); // Yellow skin
+                    const mClothes = new THREE.MeshStandardMaterial({color: 0xffffff}); // White clothes
+                    
+                    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.4), mClothes);
+                    body.position.y = 1.4; body.castShadow = true;
+                    
+                    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mSkin);
+                    head.position.y = 2.1; head.castShadow = true;
+                    
+                    const armLGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25); armLGeo.translate(0, -0.3, 0); 
+                    const armL = new THREE.Mesh(armLGeo, mClothes);
+                    armL.position.set(-0.55, 1.8, 0); armL.castShadow = true;
 
-                const armRGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25); armRGeo.translate(0, -0.3, 0);
-                const armR = new THREE.Mesh(armRGeo, mClothes);
-                armR.position.set(0.55, 1.8, 0); armR.castShadow = true;
-                
-                const legLGeo = new THREE.BoxGeometry(0.3, 1.0, 0.3); legLGeo.translate(0, -0.5, 0);
-                const legL = new THREE.Mesh(legLGeo, mClothes);
-                legL.position.set(-0.2, 0.9, 0); legL.castShadow = true;
+                    const armRGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25); armRGeo.translate(0, -0.3, 0);
+                    const armR = new THREE.Mesh(armRGeo, mClothes);
+                    armR.position.set(0.55, 1.8, 0); armR.castShadow = true;
+                    
+                    const legLGeo = new THREE.BoxGeometry(0.3, 1.0, 0.3); legLGeo.translate(0, -0.5, 0);
+                    const legL = new THREE.Mesh(legLGeo, mClothes);
+                    legL.position.set(-0.2, 0.9, 0); legL.castShadow = true;
 
-                const legRGeo = new THREE.BoxGeometry(0.3, 1.0, 0.3); legRGeo.translate(0, -0.5, 0);
-                const legR = new THREE.Mesh(legRGeo, mClothes);
-                legR.position.set(0.2, 0.9, 0); legR.castShadow = true;
+                    const legRGeo = new THREE.BoxGeometry(0.3, 1.0, 0.3); legRGeo.translate(0, -0.5, 0);
+                    const legR = new THREE.Mesh(legRGeo, mClothes);
+                    legR.position.set(0.2, 0.9, 0); legR.castShadow = true;
 
-                tContainer.add(body); tContainer.add(head); 
-                tContainer.add(armL); tContainer.add(armR); 
-                tContainer.add(legL); tContainer.add(legR);
+                    tContainer.add(body); tContainer.add(head); 
+                    tContainer.add(armL); tContainer.add(armR); 
+                    tContainer.add(legL); tContainer.add(legR);
 
-                tContainer.userData = { 
-                    type: 'realman', hp: 100, active: true, 
-                    head: head, body: body, 
-                    armL: armL, armR: armR, legL: legL, legR: legR,
-                    timeOffset: Math.random() * 100,
-                    walkDir: Math.random() > 0.5 ? 1 : -1,
-                    walkSpeed: 4 + Math.random() * 4,
-                    originX: 0
-                };
+                    tContainer.userData = { 
+                        type: 'realman', hp: 100, active: true, 
+                        head: head, body: body, 
+                        armL: armL, armR: armR, legL: legL, legR: legR,
+                        timeOffset: Math.random() * 100,
+                        walkDir: Math.random() > 0.5 ? 1 : -1,
+                        walkSpeed: 4 + Math.random() * 4,
+                        originX: 0
+                    };
+                }
             } 
             else if (targetType === 'hologram') {
                 const mat = new THREE.MeshBasicMaterial({color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.8});
@@ -1188,10 +1231,15 @@
                     t.userData.timeOffset += dt * t.userData.walkSpeed;
                     let tAnim = t.userData.timeOffset;
                     
-                    t.userData.armL.rotation.x = Math.sin(tAnim) * 0.8;
-                    t.userData.armR.rotation.x = Math.sin(tAnim + Math.PI) * 0.8;
-                    t.userData.legL.rotation.x = Math.sin(tAnim + Math.PI) * 0.8;
-                    t.userData.legR.rotation.x = Math.sin(tAnim) * 0.8;
+                    if (t.userData.mixer) {
+                        t.userData.mixer.update(dt);
+                    } else {
+                        t.userData.armL.rotation.x = Math.sin(tAnim) * 0.8;
+                        t.userData.armR.rotation.x = Math.sin(tAnim + Math.PI) * 0.8;
+                        t.userData.legL.rotation.x = Math.sin(tAnim + Math.PI) * 0.8;
+                        t.userData.legR.rotation.x = Math.sin(tAnim) * 0.8;
+                        t.position.y = Math.abs(Math.sin(tAnim)) * 0.1;
+                    }
                     
                     t.position.x += t.userData.walkDir * t.userData.walkSpeed * dt;
                     
@@ -1200,7 +1248,6 @@
                     }
                     
                     t.rotation.y = t.userData.walkDir > 0 ? Math.PI/2 : -Math.PI/2;
-                    t.position.y = Math.abs(Math.sin(tAnim)) * 0.1;
                 } else if (t.userData.type === 'drone') {
                     t.userData.time += dt;
                     t.userData.ring.rotation.z += dt * 10;
