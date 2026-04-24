@@ -534,6 +534,7 @@
                     <button class="opt-btn active" data-mode="elimination">Elimination</button>
                     <button class="opt-btn" data-mode="rescue">VIP Rescue</button>
                     <button class="opt-btn" data-mode="human">Real Man</button>
+                    <button class="opt-btn" data-mode="fast">Fast Blitz</button>
                 </div>
             </div>
 
@@ -769,7 +770,7 @@
         gltfLoader.load('./assets/models/Soldier.glb', (gltf) => {
             loadedSoldier = gltf.scene;
             soldierAnimations = gltf.animations;
-            loadedSoldier.scale.set(1.5, 1.5, 1.5);
+            loadedSoldier.scale.set(2.5, 2.5, 2.5);
             loadedSoldier.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
@@ -1089,13 +1090,17 @@
                 tContainer.userData = { type: 'vip', hp: 10, active: true, head: head, body: body };
             } 
             else if (targetType === 'dummy') {
-                const mRobo = new THREE.MeshStandardMaterial({color: 0xaaaaaa, metalness: 0.8, roughness: 0.4});
-                const mHead = new THREE.MeshStandardMaterial({color: 0xffaa00, metalness: 0.9, roughness: 0.2});
-                const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.4), mRobo);
-                body.position.y = 0.6; body.castShadow = true;
-                const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mHead);
-                head.position.y = 1.4; head.castShadow = true;
-                tContainer.add(body); tContainer.add(head);
+                const mRobo = new THREE.MeshStandardMaterial({color: 0xe62e00, metalness: 0.6, roughness: 0.4});
+                const mHead = new THREE.MeshStandardMaterial({color: 0x00ffcc, metalness: 0.9, roughness: 0.2, emissive: 0x003333});
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.2, 3.0, 16), mRobo);
+                body.position.y = 1.5; body.castShadow = true;
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), mHead);
+                head.position.y = 3.8; head.castShadow = true;
+                const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 2.0, 8), mRobo);
+                armL.position.set(-1.8, 2.0, 0); armL.rotation.z = Math.PI / 4; armL.castShadow = true;
+                const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 2.0, 8), mRobo);
+                armR.position.set(1.8, 2.0, 0); armR.rotation.z = -Math.PI / 4; armR.castShadow = true;
+                tContainer.add(body); tContainer.add(head); tContainer.add(armL); tContainer.add(armR);
                 tContainer.userData = { type: 'dummy', hp: 100, active: true, head: head, body: body };
             } 
             else if (targetType === 'realman') {
@@ -1165,18 +1170,18 @@
             } 
             else if (targetType === 'hologram') {
                 const mat = new THREE.MeshBasicMaterial({color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.8});
-                const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.05, 16), mat);
-                mesh.rotation.x = Math.PI / 2; mesh.position.y = 1;
+                const mesh = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.1, 16), mat);
+                mesh.rotation.x = Math.PI / 2; mesh.position.y = 2;
                 tContainer.add(mesh);
                 tContainer.userData = { type: 'hologram', hp: 1, active: true, mesh: mesh, spinSpeed: 2 };
             }
             else if (targetType === 'barrel') {
                 const matBody = new THREE.MeshStandardMaterial({color: 0xdd1111, roughness: 0.7});
                 const matBands = new THREE.MeshStandardMaterial({color: 0x111111, roughness: 0.9});
-                const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.5, 16), matBody);
-                mesh.position.y = 0.75; mesh.castShadow = true;
-                const b1 = new THREE.Mesh(new THREE.CylinderGeometry(0.51, 0.51, 0.1, 16), matBands); b1.position.y = 1.1;
-                const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.51, 0.51, 0.1, 16), matBands); b2.position.y = 0.4;
+                const mesh = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 2.5, 16), matBody);
+                mesh.position.y = 1.25; mesh.castShadow = true;
+                const b1 = new THREE.Mesh(new THREE.CylinderGeometry(1.02, 1.02, 0.2, 16), matBands); b1.position.y = 1.8;
+                const b2 = new THREE.Mesh(new THREE.CylinderGeometry(1.02, 1.02, 0.2, 16), matBands); b2.position.y = 0.7;
                 tContainer.add(mesh); tContainer.add(b1); tContainer.add(b2);
                 tContainer.userData = { type: 'barrel', hp: 50, active: true };
             }
@@ -1471,6 +1476,7 @@
                 triggerKillCam(target, point);
             }
             
+            let respawnTime = (currentMode === 'fast') ? 400 : 3000;
             setTimeout(() => {
                 const idx = targets.indexOf(target);
                 if(idx > -1) {
@@ -1478,7 +1484,7 @@
                     targets.splice(idx, 1);
                 }
                 spawnTarget();
-            }, 3000);
+            }, respawnTime);
         }
 
         function triggerKillCam(target, point) {
